@@ -61,6 +61,38 @@ function computeStreakCount(logs) {
   return streak;
 }
 
+function computeLongestStreak(logs) {
+  const completedDates = (logs ?? [])
+    .filter((l) => l?.completed && l?.log_date)
+    .map((l) => String(l.log_date))
+    .filter(Boolean);
+
+  if (!completedDates.length) return 0;
+
+  const unique = Array.from(new Set(completedDates));
+  const dates = unique
+    .map((d) => parseISODate(d))
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime());
+
+  let best = 0;
+  let run = 0;
+
+  for (let i = 0; i < dates.length; i += 1) {
+    if (i === 0) {
+      run = 1;
+    } else {
+      const prev = dates[i - 1];
+      const cur = dates[i];
+      const gap = diffDays(prev, cur);
+      run = gap === 1 ? run + 1 : 1;
+    }
+    if (run > best) best = run;
+  }
+
+  return best;
+}
+
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -153,7 +185,6 @@ export default function DashboardPage() {
         const response = await fetch("https://zenquotes.io/api/today", {
           cache: "no-store",
         });
-        console.log(response, "quote response");
         if (!response.ok) throw new Error("Quote request failed");
         const data = await response.json();
         const item = data?.[0];
@@ -255,7 +286,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-base-100">
+      <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-[#f5f3ff] to-[#ede9fe]">
         <span className="loading loading-spinner loading-lg" />
       </main>
     );
@@ -270,22 +301,28 @@ export default function DashboardPage() {
   const deadlinePassed = typeof daysRemaining === "number" && daysRemaining < 0;
 
   const streakCount = computeStreakCount(logs);
+  const longestStreak = computeLongestStreak(logs);
 
   const { year, month, daysInMonth, startWeekday } = getMonthMeta(today);
   const monthName = today.toLocaleString(undefined, { month: "long" });
 
   return (
-    <main className="min-h-screen bg-base-100">
-      <header className="border-b border-base-200">
-        <div className="navbar mx-auto w-full max-w-[480px] px-4">
-          <div className="flex-1">
-            <span className="text-lg font-bold">OneTrack</span>
-          </div>
-          <div className="flex-none">
-            <span className="text-sm text-base-content/70">My Goal</span>
-          </div>
-          <div className="flex-1 justify-end">
-            <button type="button" className="btn btn-ghost btn-sm" onClick={handleLogout}>
+    <main className="min-h-screen bg-gradient-to-b from-[#f5f3ff] to-[#ede9fe]">
+      <header className="sticky top-0 z-10 border-b border-gray-100 bg-white shadow-sm">
+        <div className="mx-auto flex w-full max-w-[480px] items-center justify-between px-6 py-4">
+          <div className="text-xl font-bold text-purple-700">OneTrack</div>
+          <div className="flex items-center gap-4">
+            <a
+              href="#goal"
+              className="rounded-xl border border-purple-600 px-6 py-3 text-sm font-semibold text-purple-600 transition-all duration-200 hover:bg-purple-50"
+            >
+              My Goal
+            </a>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm font-medium text-red-500 hover:text-red-600"
+            >
               Logout
             </button>
           </div>
@@ -294,227 +331,185 @@ export default function DashboardPage() {
 
       <div className="mx-auto w-full max-w-[480px] space-y-5 px-4 py-6">
         {error ? (
-          <div className="alert alert-error">
-            <span>{error}</span>
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
           </div>
         ) : null}
 
-        <section className="card border border-base-200 bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="text-center">
-              {deadlinePassed ? (
-                <>
-                  <div className="text-3xl font-semibold">Goal deadline reached</div>
-                  <div className="mt-1 text-sm text-base-content/70">
-                    Your deadline was {goal.deadline}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="text-6xl font-extrabold leading-none">
-                    {typeof daysRemaining === "number" ? daysRemaining : "—"}
-                  </div>
-                  <div className="mt-1 text-sm text-base-content/70">days remaining</div>
-                </>
-              )}
-            </div>
-
-            <div className="mt-4 card bg-base-200/40">
-              <div className="card-body p-4">
-                <div className="text-xs uppercase tracking-wide text-base-content/60">
-                  Your goal
+        <section id="goal" className="rounded-2xl bg-gradient-to-br from-purple-600 to-purple-800 p-6 text-white">
+          <div className="text-center">
+            {deadlinePassed ? (
+              <>
+                <div className="text-2xl font-black">Goal deadline reached</div>
+                <div className="mt-1 text-sm text-purple-200">Your deadline was {goal.deadline}</div>
+              </>
+            ) : (
+              <>
+                <div className="text-7xl font-black leading-none">
+                  {typeof daysRemaining === "number" ? daysRemaining : "—"}
                 </div>
-                <div className="mt-1 text-base">{goal.goal_text}</div>
-                {goal.deadline ? (
-                  <div className="mt-2 text-sm text-base-content/70">
-                    Deadline: <span className="font-medium">{goal.deadline}</span>
-                  </div>
-                ) : null}
+                <div className="mt-2 text-lg text-purple-200">days remaining</div>
+              </>
+            )}
+          </div>
+
+          <div className="my-5 border-t border-purple-500" />
+
+          <div className="text-purple-300 text-xs font-semibold uppercase tracking-wider">
+            Your goal
+          </div>
+          <div className="mt-2 text-lg font-medium">{goal.goal_text}</div>
+          {goal.deadline ? (
+            <div className="mt-2 text-sm text-purple-200">Deadline: {goal.deadline}</div>
+          ) : null}
+        </section>
+
+        <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="text-sm italic text-gray-500">Daily Inspiration</div>
+          <div className="mt-2 text-6xl font-serif leading-none text-purple-200">&ldquo;</div>
+          <div className="mt-2 text-base italic text-gray-700">
+            {quoteError ? (
+              <>The secret of getting ahead is getting started.</>
+            ) : quote ? (
+              <>{quote.text}</>
+            ) : (
+              <span className="text-gray-400">Loading...</span>
+            )}
+          </div>
+          <div className="mt-2 text-sm font-medium text-purple-600">
+            {quoteError ? "— Mark Twain" : quote ? `— ${quote.author}` : ""}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">What&apos;s your one thing today?</h2>
+
+          {!todayLog ? (
+            <>
+              <textarea
+                className="mt-4 w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-purple-500"
+                style={{ minHeight: 100 }}
+                placeholder="Write your one focus task for today..."
+                value={focusInput}
+                onChange={(e) => setFocusInput(e.target.value)}
+              />
+              <button
+                type="button"
+                className="mt-4 w-full rounded-xl bg-purple-600 px-6 py-3 font-semibold text-white transition-all duration-200 hover:bg-purple-700 disabled:opacity-60"
+                onClick={handleSetFocus}
+                disabled={actionLoading || !focusInput.trim()}
+              >
+                {actionLoading ? "Saving..." : "Set Today's Focus"}
+              </button>
+            </>
+          ) : todayLog.completed ? (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="text-sm font-semibold text-green-600">Today&apos;s focus completed! 🎉</div>
+                <div className="mt-2 rounded-r-xl border-l-4 border-purple-600 bg-purple-50 p-4 text-gray-900">
+                  {todayLog.focus_task}
+                </div>
+              </div>
+              <div className="text-sm text-gray-500">
+                Current streak: <span className="font-semibold text-purple-600">{streakCount}</span>
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="card border border-base-200 bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Daily quote</h2>
-              <span className="text-xs text-base-content/50">ZenQuotes</span>
-            </div>
-
-            <div className="mt-3 text-sm text-base-content/80">
-              {quoteError ? (
-                <p>
-                  The secret of getting ahead is getting started.{" "}
-                  <span className="text-base-content/60">— Mark Twain</span>
-                </p>
-              ) : quote ? (
-                <p>
-                  {quote.text}{" "}
-                  <span className="text-base-content/60">— {quote.author}</span>
-                </p>
-              ) : (
-                <div className="flex items-center gap-2 text-base-content/60">
-                  <span className="loading loading-dots loading-sm" />
-                  Loading quote...
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="card border border-base-200 bg-base-100 shadow-sm">
-          <div className="card-body">
-            <h2 className="text-lg font-semibold">What&apos;s your one thing today?</h2>
-
-            {!todayLog ? (
-              <>
-                <textarea
-                  className="textarea textarea-bordered mt-3 min-h-28 w-full"
-                  placeholder="Write your one focus task for today..."
-                  value={focusInput}
-                  onChange={(e) => setFocusInput(e.target.value)}
-                />
+          ) : (
+            <div className="mt-4 space-y-4">
+              <div className="rounded-r-xl border-l-4 border-purple-600 bg-purple-50 p-4 text-gray-900">
+                {todayLog.focus_task}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  className="btn btn-primary mt-4 w-full"
-                  onClick={handleSetFocus}
-                  disabled={actionLoading || !focusInput.trim()}
+                  className="rounded-xl bg-green-500 px-6 py-3 font-semibold text-white transition-all duration-200 hover:bg-green-600 disabled:opacity-60"
+                  onClick={() => handleSetCompleted(true)}
+                  disabled={actionLoading}
                 >
-                  {actionLoading ? (
-                    <>
-                      <span className="loading loading-spinner loading-sm" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Set Today's Focus"
-                  )}
+                  {actionLoading ? "Saving..." : "Yes I did it!"}
                 </button>
-              </>
-            ) : todayLog.completed ? (
-              <div className="mt-4 space-y-3">
-                <div className="alert alert-success">
-                  <span>Today&apos;s focus completed! 🎉</span>
-                </div>
-                <div className="card bg-base-200/40">
-                  <div className="card-body p-4">
-                    <div className="text-xs uppercase tracking-wide text-base-content/60">
-                      Today&apos;s task
-                    </div>
-                    <div className="mt-1 text-base">{todayLog.focus_task}</div>
-                  </div>
-                </div>
-                <div className="text-sm text-base-content/70">
-                  Current streak: <span className="font-semibold">{streakCount}</span>
-                </div>
+                <button
+                  type="button"
+                  className="rounded-xl bg-red-100 px-6 py-3 font-semibold text-red-600 transition-all duration-200 hover:bg-red-200 disabled:opacity-60"
+                  onClick={() => handleSetCompleted(false)}
+                  disabled={actionLoading}
+                >
+                  {actionLoading ? "Saving..." : "Not today"}
+                </button>
               </div>
-            ) : (
-              <div className="mt-4 space-y-4">
-                <div className="card bg-base-200/40">
-                  <div className="card-body p-4">
-                    <div className="text-xs uppercase tracking-wide text-base-content/60">
-                      Today&apos;s task
-                    </div>
-                    <div className="mt-1 text-base">{todayLog.focus_task}</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    className="btn btn-success"
-                    onClick={() => handleSetCompleted(true)}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <span className="loading loading-spinner loading-sm" />
-                    ) : null}
-                    Yes, I did it!
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-error btn-outline"
-                    onClick={() => handleSetCompleted(false)}
-                    disabled={actionLoading}
-                  >
-                    {actionLoading ? (
-                      <span className="loading loading-spinner loading-sm" />
-                    ) : null}
-                    Not today
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
+          )}
 
-            {actionMessage ? (
-              <div className="mt-4 text-sm text-base-content/70">{actionMessage}</div>
-            ) : null}
-          </div>
+          {actionMessage ? (
+            <div className="mt-4 text-sm text-gray-500">{actionMessage}</div>
+          ) : null}
         </section>
 
-        <section className="card border border-base-200 bg-base-100 shadow-sm">
-          <div className="card-body">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-lg font-semibold">Streak calendar</h2>
-              <div className="text-sm text-base-content/70">
-                {monthName} {year}
-              </div>
+        <section className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-lg font-bold text-gray-900">Streak Calendar</h2>
+            <div className="text-sm text-gray-500">
+              {monthName} {year}
             </div>
+          </div>
 
-            <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs">
-              {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
-                <div key={d} className="text-base-content/50">
-                  {d}
-                </div>
-              ))}
-            </div>
+          <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-semibold text-gray-400 uppercase">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
 
-            <div className="mt-2 grid grid-cols-7 gap-2">
-              {Array.from({ length: startWeekday }).map((_, idx) => (
-                <div key={`pad-${idx}`} />
-              ))}
-              {Array.from({ length: daysInMonth }).map((_, i) => {
-                const day = i + 1;
-                const date = new Date(year, month, day);
-                const key = toISODate(date);
-                const isToday = key === todayKey;
-                const isFuture = date.getTime() > new Date(year, month, today.getDate()).getTime();
-                const entry = logsByDate.get(key);
-                const completed = Boolean(entry?.completed);
+          <div className="mt-3 grid grid-cols-7 gap-2">
+            {Array.from({ length: startWeekday }).map((_, idx) => (
+              <div key={`pad-${idx}`} />
+            ))}
+            {Array.from({ length: daysInMonth }).map((_, i) => {
+              const day = i + 1;
+              const date = new Date(year, month, day);
+              const key = toISODate(date);
+              const isToday = key === todayKey;
+              const isFuture = date.getTime() > new Date(year, month, today.getDate()).getTime();
+              const entry = logsByDate.get(key);
+              const completed = Boolean(entry?.completed);
 
-                let cls = "bg-base-200/40 text-base-content/60";
-                let icon = "";
-                if (isFuture) {
-                  cls = "bg-base-200/20 text-base-content/30";
-                } else if (entry) {
-                  if (completed) {
-                    cls = "bg-success/20 text-success-content";
-                    icon = "✅";
-                  } else {
-                    cls = "bg-error/15 text-error-content";
-                    icon = "❌";
-                  }
+              let cellClass = "text-gray-500";
+              let showDot = false;
+
+              if (isFuture) {
+                cellClass = "text-gray-300";
+              } else if (isToday) {
+                cellClass = "bg-purple-600 text-white font-bold";
+              } else if (entry) {
+                if (completed) {
+                  cellClass = "bg-green-100 text-green-700 font-medium";
+                  showDot = true;
+                } else {
+                  cellClass = "bg-red-100 text-red-400";
                 }
+              }
 
-                return (
-                  <div
-                    key={key}
-                    className={`aspect-square rounded-lg p-1 flex items-center justify-center ${cls} ${
-                      isToday ? "ring-2 ring-primary ring-offset-2 ring-offset-base-100" : ""
-                    }`}
-                    title={key}
-                  >
-                    <div className="flex flex-col items-center justify-center leading-none">
-                      <div className="text-[11px]">{day}</div>
-                      {icon ? <div className="mt-1 text-sm">{icon}</div> : null}
-                    </div>
+              return (
+                <div key={key} className="text-center">
+                  <div className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full ${cellClass}`}>
+                    {day}
                   </div>
-                );
-              })}
-            </div>
+                  {showDot ? (
+                    <div className="mx-auto mt-1 h-1.5 w-1.5 rounded-full bg-green-500" />
+                  ) : (
+                    <div className="mt-1 h-1.5" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-            <div className="mt-4 text-sm text-base-content/70">
-              Current streak: <span className="font-semibold">{streakCount}</span>
-            </div>
+          <div className="mt-5 flex items-center justify-between">
+            <div className="text-sm text-gray-500">Current Streak 🔥</div>
+            <div className="text-2xl font-bold text-purple-600">{streakCount}</div>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <div className="text-sm text-gray-500">Longest Streak</div>
+            <div className="text-lg font-bold text-purple-600">{longestStreak}</div>
           </div>
         </section>
       </div>
